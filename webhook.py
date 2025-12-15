@@ -11,48 +11,44 @@ def gupshup_webhook():
         print("🔔 Incoming webhook:")
         print(json.dumps(data, indent=2))
 
-        # --- Ignore non-message events (e.g., system/sandbox events) ---
+        # --- Ignore non-message events (system events, sandbox events) ---
         if data.get("type") != "message":
             print(f"ℹ️ Ignoring webhook type: {data.get('type')}")
             return jsonify({"status": "ok"}), 200
 
-        payload = data.get("payload", {})
-        sender = payload.get("sender")
-        timestamp = data.get("timestamp")  # Root-level timestamp
-
-        message = payload.get("message", {})
-        reply_text = None
-
-        # --- Safety check for required fields ---
-        if not all([sender, timestamp, message]):
-            print("⚠️ Missing required fields (sender, timestamp, or message).")
+        # --- Extract timestamp from root ---
+        timestamp = data.get("timestamp")
+        if timestamp is None:
+            print("⚠️ Missing timestamp in webhook")
             return jsonify({"status": "ok"}), 200
-
-        # --- Text reply ---
-        if "text" in message:
-            reply_text = message["text"]
-
-        # --- Button reply ---
-        elif message.get("type") == "button_reply":
-            reply_text = message["reply"]["id"]
-
-            # Save sender (mobile) if "Yes" button clicked
-            if reply_text.lower() == "yes":
-                received_at = datetime.fromtimestamp(timestamp / 1000.0).strftime("%Y-%m-%d %H:%M:%S")
-                with open("yes_responses.csv", "a") as f:
-                    f.write(f"{sender},{received_at}\n")
-                print(f"✅ Saved mobile {sender} at {received_at}")
-
-        # Handle unsupported/non-text messages
-        if reply_text is None:
-            print(f"ℹ️ Received non-text message type: {message.get('type')}")
-            return jsonify({"status": "ok"}), 200
-
-        # Convert timestamp to human-readable
         received_at = datetime.fromtimestamp(timestamp / 1000.0).strftime("%Y-%m-%d %H:%M:%S")
+
+        # --- Extract payload and sender ---
+        payload = data.get("payload", {})
+        sender_info = payload.get("sender", {})
+        sender = sender_info.get("phone")
+        if not sender:
+            print("⚠️ Missing sender phone number")
+            return jsonify({"status": "ok"}), 200
+
+        # --- Extract message / reply ---
+        message_type = payload.get("type")
+        reply_payload = payload.get("payload", {})
+        reply_text = reply_payload.get("text")  # This is the user reply (Yes/No)
+
+        if not reply_text:
+            print(f"ℹ️ No reply text found (message type: {message_type})")
+            return jsonify({"status": "ok"}), 200
+
         print(f"📱 Mobile: {sender}")
         print(f"💬 Reply: {reply_text}")
         print(f"⏰ Time: {received_at}")
+
+        # --- Save mobile if user clicked "Yes" ---
+        if reply_text.strip().lower() == "yes":
+            with open("yes_responses.csv", "a") as f:
+                f.write(f"{sender},{received_at}\n")
+            print(f"✅ Saved mobile {sender} at {received_at}")
 
         return jsonify({"status": "ok"}), 200
 
@@ -62,5 +58,5 @@ def gupshup_webhook():
 
 
 if __name__ == "__main__":
-    # Use gunicorn in production; app.run is fine for local testing
+    # Use gunicorn in production; app.run is fine for testing
     app.run(host="0.0.0.0", port=5000)
