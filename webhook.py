@@ -26,16 +26,18 @@ def gupshup_webhook():
         elif message.get("type") == "button_reply":
             reply_text = message["reply"]["id"]
 
-        # Convert timestamp
-        received_at = datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S")
+            # Save mobile number if the user clicked "Yes"
+            if reply_text.lower() == "yes":
+                received_at = datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S")
+                with open("yes_responses.csv", "a") as f:
+                    f.write(f"{sender},{received_at}\n")
+                print(f"✅ Saved mobile {sender} at {received_at}")
 
+        # Convert timestamp for logging
+        received_at = datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S")
         print(f"📱 Mobile: {sender}")
         print(f"💬 Reply: {reply_text}")
         print(f"⏰ Time: {received_at}")
-
-        # -------------------------
-        # TODO: Save to DB / CRM
-        # -------------------------
 
         return jsonify({"status": "ok"}), 200
 
